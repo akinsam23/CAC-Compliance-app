@@ -20,7 +20,7 @@ let users: User[] = [
         email: 'admin@cac.gov.ng',
         password: 'adminpassword',
         role: Role.Admin,
-        permissions: [Permission.CreateUsers, Permission.DeleteCompanyRecords, Permission.ViewAllRecords],
+        permissions: [Permission.CreateUsers, Permission.DeleteUsers, Permission.DeleteCompanyRecords, Permission.ViewAllRecords, Permission.CreateCompanyRecord],
     },
     {
         id: 'user-2',
@@ -40,7 +40,8 @@ const simulateNetwork = (delay = 500) => new Promise(res => setTimeout(res, dela
 // Company Functions
 export const fetchCompanies = async (): Promise<Company[]> => {
   await simulateNetwork();
-  return companies;
+  // Return a copy to prevent direct mutation from components
+  return [...companies];
 };
 
 export const updateCompanyStatus = async (companyId: string, status: ComplianceStatus): Promise<Company> => {
@@ -56,6 +57,31 @@ export const updateCompanyStatus = async (companyId: string, status: ComplianceS
     }
     throw new Error("Company not found");
 };
+
+export const createCompany = async (
+    companyName: string,
+    agentEmail: string,
+    clientEmail: string,
+    filingYear: number,
+    returnsStatus: ComplianceStatus
+): Promise<Company> => {
+    await simulateNetwork();
+    if (companies.some(c => c.companyName.toLowerCase() === companyName.toLowerCase() && c.filingYear === filingYear)) {
+        throw new Error("A record for this company and filing year already exists.");
+    }
+    const newCompany: Company = {
+        id: `comp-${Date.now()}`,
+        companyName,
+        agentEmail,
+        clientEmail,
+        filingYear,
+        returnsStatus,
+        lastContactDate: new Date().toISOString().split('T')[0],
+    };
+    companies.push(newCompany);
+    return newCompany;
+};
+
 
 // User & Auth Functions
 export const registerUser = async (name: string, email: string, password: string): Promise<User> => {
@@ -147,4 +173,18 @@ export const createAdmin = async (name: string, email: string, permissions: Perm
     users.push(newAdmin);
     const { password: _, ...userToReturn } = newAdmin;
     return userToReturn;
+};
+
+export const deleteAdmin = async (adminIdToDelete: string, currentAdminId: string): Promise<void> => {
+    await simulateNetwork();
+    if (adminIdToDelete === currentAdminId) {
+        throw new Error("You cannot delete your own account.");
+    }
+
+    const userIndex = users.findIndex(u => u.id === adminIdToDelete && u.role === Role.Admin);
+    if (userIndex === -1) {
+        throw new Error("Admin user not found.");
+    }
+
+    users.splice(userIndex, 1);
 };
