@@ -1,0 +1,5 @@
+{
+  "name": "CAC Compliance Bot Dashboard",
+  "description": "A web application for Corporate Affairs Commission (CAC) agents to monitor and manage annual returns compliance for their clients. The dashboard provides a clear overview of company statuses, tracks important dates, and leverages AI to assist with generating client communications.",
+  "requestFramePermissions": []
+}
