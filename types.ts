@@ -22,7 +22,6 @@ export enum Role {
 
 export enum Permission {
     CreateUsers = 'CREATE_USERS',
-    DeleteUsers = 'DELETE_USERS',
     DeleteCompanyRecords = 'DELETE_COMPANY_RECORDS',
     ViewAllRecords = 'VIEW_ALL_RECORDS',
     CreateCompanyRecord = 'CREATE_COMPANY_RECORD',

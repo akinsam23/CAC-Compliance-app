@@ -20,7 +20,7 @@ let users: User[] = [
         email: 'admin@cac.gov.ng',
         password: 'adminpassword',
         role: Role.Admin,
-        permissions: [Permission.CreateUsers, Permission.DeleteUsers, Permission.DeleteCompanyRecords, Permission.ViewAllRecords, Permission.CreateCompanyRecord],
+        permissions: [Permission.CreateUsers, Permission.DeleteCompanyRecords, Permission.ViewAllRecords, Permission.CreateCompanyRecord],
     },
     {
         id: 'user-2',
@@ -173,18 +173,4 @@ export const createAdmin = async (name: string, email: string, permissions: Perm
     users.push(newAdmin);
     const { password: _, ...userToReturn } = newAdmin;
     return userToReturn;
-};
-
-export const deleteAdmin = async (adminIdToDelete: string, currentAdminId: string): Promise<void> => {
-    await simulateNetwork();
-    if (adminIdToDelete === currentAdminId) {
-        throw new Error("You cannot delete your own account.");
-    }
-
-    const userIndex = users.findIndex(u => u.id === adminIdToDelete && u.role === Role.Admin);
-    if (userIndex === -1) {
-        throw new Error("Admin user not found.");
-    }
-
-    users.splice(userIndex, 1);
 };

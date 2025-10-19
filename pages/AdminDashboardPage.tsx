@@ -1,12 +1,10 @@
-
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Company, User } from '../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import type { User, Company } from '../types';
 import { Permission } from '../types';
-import { fetchCompanies, getAdmins } from '../services/mockApiService';
+import { getAdmins, createAdmin } from '../services/mockApiService';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
-import ComplianceTable from '../components/ComplianceTable';
-import CompanyDetailModal from '../components/CompanyDetailModal';
+import { CloseIcon } from '../components/Icons';
 import AddCompanyModal from '../components/AddCompanyModal';
 
 interface AdminDashboardPageProps {
@@ -14,137 +12,151 @@ interface AdminDashboardPageProps {
   onLogout: () => void;
 }
 
+const AddAdminModal: React.FC<{ onClose: () => void; onAdminAdded: (admin: User) => void }> = ({ onClose, onAdminAdded }) => {
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [permissions, setPermissions] = useState<Permission[]>([]);
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handlePermissionChange = (permission: Permission) => {
+        setPermissions(prev => 
+            prev.includes(permission) 
+                ? prev.filter(p => p !== permission) 
+                : [...prev, permission]
+        );
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (!name || !email || permissions.length === 0) {
+            setError("All fields are required.");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const newAdmin = await createAdmin(name, email, permissions);
+            onAdminAdded(newAdmin);
+            onClose();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'An error occurred.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Add New Admin</h2>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                <CloseIcon className="w-6 h-6" />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" className="w-full px-3 py-2 text-gray-900 bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email Address" className="w-full px-3 py-2 text-gray-900 bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+              <div>
+                <h3 className="font-semibold mb-2 dark:text-white">Permissions</h3>
+                <div className="space-y-2">
+                    {Object.values(Permission).map(p => (
+                        <label key={p} className="flex items-center space-x-3">
+                            <input type="checkbox" checked={permissions.includes(p)} onChange={() => handlePermissionChange(p)} className="form-checkbox h-5 w-5 text-blue-600 rounded dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-blue-500" />
+                            <span className="text-gray-700 dark:text-gray-300">{p.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</span>
+                        </label>
+                    ))}
+                </div>
+              </div>
+              {error && <p className="text-sm text-red-500">{error}</p>}
+              <div className="flex justify-end gap-4 pt-4">
+                <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">Cancel</button>
+                <button type="submit" disabled={isLoading} className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300">{isLoading ? 'Adding...' : 'Add Admin'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+    );
+};
+
 const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ user, onLogout }) => {
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [admins, setAdmins] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
 
+  const loadAdmins = useCallback(async () => {
+    setIsLoading(true);
+    const data = await getAdmins();
+    setAdmins(data);
+    setIsLoading(false);
+  }, []);
+
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [companyData, adminData] = await Promise.all([
-          fetchCompanies(),
-          getAdmins(),
-        ]);
-        setCompanies(companyData);
-        setAdmins(adminData);
-      } catch (error) {
-        console.error("Failed to load admin dashboard data", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, []);
-
-  const filteredCompanies = useMemo(() => {
-    if (!searchTerm) return companies;
-    return companies.filter(company =>
-      company.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      company.clientEmail.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [companies, searchTerm]);
-
-  const handleSelectCompany = (company: Company) => {
-    setSelectedCompany(company);
-  };
+    loadAdmins();
+  }, [loadAdmins]);
   
-  const handleUpdateCompany = (updatedCompany: Company) => {
-    setCompanies(prev => prev.map(c => c.id === updatedCompany.id ? updatedCompany : c));
-    if (selectedCompany?.id === updatedCompany.id) {
-        setSelectedCompany(updatedCompany);
-    }
+  const handleAdminAdded = (newAdmin: User) => {
+    setAdmins(prev => [...prev, newAdmin]);
   };
 
-  const handleCloseModal = () => {
-    setSelectedCompany(null);
+  const handleCompanyAdded = (newCompany: Company) => {
+    // In a real app, this might refresh a list or show a success message.
+    // Here we'll just log it to confirm it was called.
+    console.log("New company added successfully:", newCompany);
   };
-  
-  const handleCompanyAdded = useCallback((newCompany: Company) => {
-      setCompanies(prev => [newCompany, ...prev]);
-  }, []);
 
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header user={user} onLogout={onLogout} onSearch={setSearchTerm} />
+        <Header user={user} onLogout={onLogout} onSearch={() => {}} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-6">
           <div className="container mx-auto">
             <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl font-semibold text-gray-800 dark:text-white">Admin Dashboard</h1>
-              {user.permissions.includes(Permission.CreateCompanyRecord) && (
-                <button 
-                  onClick={() => setShowAddCompanyModal(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  Add New Company
-                </button>
-              )}
+                 <h1 className="text-3xl font-semibold text-gray-800 dark:text-white">Admin Management</h1>
+                 <div className="flex items-center gap-4">
+                    {user.permissions.includes(Permission.CreateCompanyRecord) && (
+                        <button onClick={() => setShowAddCompanyModal(true)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                            Add Company
+                        </button>
+                    )}
+                    <button onClick={() => setShowAddAdminModal(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Add Admin</button>
+                 </div>
             </div>
             
-            <div className="mb-10">
-              <h2 className="text-2xl font-semibold text-gray-700 dark:text-gray-200 mb-4">Company Records Management</h2>
-              <ComplianceTable
-                companies={filteredCompanies}
-                isLoading={loading}
-                onSelectCompany={handleSelectCompany}
-              />
-            </div>
-
-            <div>
-              <h2 className="text-2xl font-semibold text-gray-700 dark:text-gray-200 mb-4">System Administrators</h2>
-              <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+             <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Role</th>
-                      </tr>
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Name</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Email</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Permissions</th>
+                        </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {loading ? (
-                          <tr><td colSpan={3} className="text-center py-10 text-gray-500 dark:text-gray-400">Loading...</td></tr>
-                      ) : admins.map(admin => (
-                        <tr key={admin.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{admin.name}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{admin.email}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm capitalize">
-                             <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
-                                {admin.role}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                       {isLoading ? (
+                           <tr><td colSpan={3} className="text-center py-10">Loading admins...</td></tr>
+                       ) : admins.map(admin => (
+                           <tr key={admin.id}>
+                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{admin.name}</td>
+                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{admin.email}</td>
+                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                   <div className="flex flex-wrap gap-1">
+                                    {admin.permissions.map(p => <span key={p} className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">{p.split('_')[0]}</span>)}
+                                   </div>
+                               </td>
+                           </tr>
+                       ))}
                     </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
+                </table>
+             </div>
           </div>
         </main>
       </div>
-
-      {selectedCompany && (
-        <CompanyDetailModal
-          company={selectedCompany}
-          onClose={handleCloseModal}
-          onUpdate={handleUpdateCompany}
-        />
-      )}
-      {showAddCompanyModal && (
-        <AddCompanyModal 
-          onClose={() => setShowAddCompanyModal(false)}
-          onCompanyAdded={handleCompanyAdded}
-        />
-      )}
+      {showAddAdminModal && <AddAdminModal onClose={() => setShowAddAdminModal(false)} onAdminAdded={handleAdminAdded} />}
+      {showAddCompanyModal && <AddCompanyModal onClose={() => setShowAddCompanyModal(false)} onCompanyAdded={handleCompanyAdded} />}
     </div>
   );
 };
